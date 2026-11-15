@@ -8,7 +8,8 @@ Public CDN URL (jsDelivr, GitHub-backed):
     https://cdn.jsdelivr.net/gh/ReoJefton/reonet-media-storage@main/<category>/<file>
 
 Rules:
-- Keep every file under 20 MB (jsDelivr will not serve larger GitHub files).
+- Size: images at most 1200 px on the longest side (1600 px for wide news photos, 3:2 or wider) and about 400 KB each (JPEG quality ~85, optimised PNG, metadata stripped, sRGB); the whole tree under 40 MB. jsDelivr refuses a GitHub package over 50 MB, and then uncached files of this repo fail with 403. `node scripts/check-media.mjs` enforces these limits; run it before every push.
+- Never rename or move a published file: databases store its jsDelivr URL. Re-encode in place (same path and extension), then purge the changed URLs (`https://purge.jsdelivr.net/gh/ReoJefton/reonet-media-storage@main/<path>`).
 - User-generated content (profile photos, cover images, attachments) never goes here; it needs per-user object storage.
 - Backend scrapers write here locally (sibling folder or `REONET_MEDIA_STORAGE_DIR`); commit and push to publish.
 
