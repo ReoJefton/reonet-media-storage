@@ -1,15 +1,25 @@
 // Enforces the size rules of README.md: node scripts/check-media.mjs
-// jsDelivr refuses GitHub packages over 50 MB, so the whole tree stays under 40 MB,
-// each image under 400 KB and at most 1200 px on its longest side (1600 px for wide news photos).
+// jsDelivr refuses GitHub packages over 50 MB, so the whole tree stays under 40 MB.
+// Each image stays within the limit of its top-level folder: the longest side is the largest place
+// the folder's images render at in the app (rendered size x device pixel ratio: 3 on phones,
+// 2 on tablets and web; phone 430 x 932 dp, tablet 1366 x 1024 dp, web desktop 1920 x 1080 dp).
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const MAX_TREE_BYTES = 40_000_000;
-const MAX_IMAGE_BYTES = 400_000;
-const MAX_SIDE = 1200;
-const MAX_SIDE_WIDE_NEWS = 1600;
-const WIDE_RATIO = 1.5;
+
+/** Longest side (px) and bytes per top-level folder; README.md lists the place behind each one. */
+const FOLDER_LIMITS = {
+    // Maps place hero: full window width x 160 dp, cover (1920 dp x 2).
+    maps: { maxSide: 3840, maxBytes: 2_500_000 },
+    // Social post photo: 16:9 at full width in the full-screen post view ((1920 - 2 x 16) dp x 2).
+    social: { maxSide: 3776, maxBytes: 2_500_000 },
+    // Social story: contained in up to 640 x 1138 dp (tablet portrait, x 2).
+    music: { maxSide: 2276, maxBytes: 1_000_000 },
+};
+/** Folders whose images have no place in the app: keep them small. */
+const DEFAULT_LIMIT = { maxSide: 1200, maxBytes: 400_000 };
 
 const root = join(import.meta.dirname, '..');
 
@@ -55,15 +65,15 @@ for (const file of files) {
     const size = statSync(join(root, file)).size;
     total += size;
     if (!/\.(jpe?g|png|gif|webp)$/i.test(file)) continue;
-    if (size > MAX_IMAGE_BYTES) problems.push(`${file}: ${(size / 1000).toFixed(0)} KB > ${MAX_IMAGE_BYTES / 1000} KB`);
+    const { maxSide, maxBytes } = Object.hasOwn(FOLDER_LIMITS, file.split('/')[0]) ? FOLDER_LIMITS[file.split('/')[0]] : DEFAULT_LIMIT;
+    if (size > maxBytes) problems.push(`${file}: ${(size / 1000).toFixed(0)} KB > ${maxBytes / 1000} KB`);
     const box = dimensions(readFileSync(join(root, file)));
     if (!box) {
         problems.push(`${file}: unreadable image header`);
         continue;
     }
     const { width, height } = box;
-    const limit = file.startsWith('news/') && width / height >= WIDE_RATIO ? MAX_SIDE_WIDE_NEWS : MAX_SIDE;
-    if (Math.max(width, height) > limit) problems.push(`${file}: ${width}x${height} > ${limit} px`);
+    if (Math.max(width, height) > maxSide) problems.push(`${file}: ${width}x${height} > ${maxSide} px`);
 }
 if (total > MAX_TREE_BYTES) problems.push(`tree: ${(total / 1e6).toFixed(1)} MB > ${MAX_TREE_BYTES / 1e6} MB`);
 

@@ -8,12 +8,23 @@ Public CDN URL (jsDelivr, GitHub-backed):
     https://cdn.jsdelivr.net/gh/ReoJefton/reonet-media-storage@main/<category>/<file>
 
 Rules:
-- Size: images at most 1200 px on the longest side (1600 px for wide news photos, 3:2 or wider) and about 400 KB each (JPEG quality ~85, optimised PNG, metadata stripped, sRGB); the whole tree under 40 MB. jsDelivr refuses a GitHub package over 50 MB, and then uncached files of this repo fail with 403. `node scripts/check-media.mjs` enforces these limits; run it before every push.
+
+- Processing: optimise only. Bake the EXIF orientation into the pixels, strip all metadata (EXIF, GPS, XMP), convert to sRGB, then resize with fit "inside" and without enlargement, so the aspect ratio stays the original's: never crop, pad or force a common size, because each place in the app frames its images differently. JPEG with mozjpeg at quality 85 (80 only when a file stays over its byte limit), PNG at compression level 9.
+- Size: the whole tree stays under 40 MB (jsDelivr refuses a GitHub package over 50 MB, and then uncached files of this repo fail with 403). Each image stays within its folder's limit, which is the largest place its images render at in the app (rendered size x device pixel ratio: 3 on phones, 2 on tablets and web; phone 430 x 932 dp, tablet 1366 x 1024 dp, web desktop 1920 x 1080 dp). `node scripts/check-media.mjs` enforces these limits; run it before every push.
+
+  | Folder | Longest side | Bytes | Largest place |
+  |---|---|---|---|
+  | `maps/` | 3840 px | 2.5 MB | Maps place hero: full window width x 160 dp, cover (web desktop) |
+  | `social/` | 3776 px | 2.5 MB | Social post photo: 16:9 at full width in the full-screen post view (web desktop) |
+  | `music/` | 2276 px | 1 MB | Social story: contained in up to 640 x 1138 dp (tablet portrait) |
+  | every other folder | 1200 px | 400 KB | none: no code, seed or database row references these raster copies (the app shows the providers' own images); `profile-presets/` holds only SVGs |
+
 - Never rename or move a published file: databases store its jsDelivr URL. Re-encode in place (same path and extension), then purge the changed URLs (`https://purge.jsdelivr.net/gh/ReoJefton/reonet-media-storage@main/<path>`).
 - User-generated content (profile photos, cover images, attachments) never goes here; it needs per-user object storage.
 - Backend scrapers write here locally (sibling folder or `REONET_MEDIA_STORAGE_DIR`); commit and push to publish.
 
 ## Directory Structure
+
 - `news/` - News article thumbnails, covers, and publisher icons
 - `radio/` - Radio station logos, stream banners, and stream audio backups
 - `podcasts/` - Podcast cover art, episode banners, and episode clips
