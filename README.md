@@ -3,36 +3,34 @@
 Source of truth for ReoNet scraped/curated media assets (images, posters, artwork, map photos).
 The backend (`reotech-expressjs`) neither stores nor serves media itself: scraped media is saved in the database as absolute CDN URLs (see `docs/MEDIA_STORAGE_CDN.md` in the backend repo).
 
-Public CDN URL (jsDelivr, GitHub-backed):
+Public CDN URL (jsDelivr, GitHub-backed; `fastly.jsdelivr.net` serves the same paths):
 
     https://cdn.jsdelivr.net/gh/ReoJefton/reonet-media-storage@main/<category>/<file>
 
+Cloudflare Pages on this repo is the planned independent fallback, and Cloudflare R2 the permanent home: [docs/STORAGE-SETUP.md](docs/STORAGE-SETUP.md) is the setup guide.
+
 Rules:
 
-- Processing: optimise only. Bake the EXIF orientation into the pixels, strip all metadata (EXIF, GPS, XMP), convert to sRGB, then resize with fit "inside" and without enlargement, so the aspect ratio stays the original's: never crop, pad or force a common size, because each place in the app frames its images differently. JPEG with mozjpeg at quality 85 (80 only when a file stays over its byte limit), PNG at compression level 9.
-- Size: the whole tree stays under 40 MB (jsDelivr refuses a GitHub package over 50 MB, and then uncached files of this repo fail with 403). Each image stays within its folder's limit, which is the largest place its images render at in the app (rendered size x device pixel ratio: 3 on phones, 2 on tablets and web; phone 430 x 932 dp, tablet 1366 x 1024 dp, web desktop 1920 x 1080 dp). `node scripts/check-media.mjs` enforces these limits; run it before every push.
+- Processing: optimise only. Bake the EXIF orientation into the pixels, strip all metadata (EXIF, GPS, XMP, IPTC, ICC profiles, comments), convert to sRGB (untagged pixels are sRGB), then resize with fit "inside" and without enlargement, so the aspect ratio stays the original's: never crop, pad or force a common size, because each place in the app frames its images differently. JPEG with mozjpeg at quality 85 (80 only when a file stays over its byte limit), PNG at compression level 9.
+- Size: the whole tree stays under 40 MB (jsDelivr refuses a GitHub package over 50 MB, and then uncached files of this repo fail with 403). Each image stays within its folder's limit, which is the largest place its images render at in the app (rendered size x device pixel ratio: 3 on phones, 2 on tablets and web; phone 430 x 932 dp, tablet 1366 x 1024 dp, web desktop 1920 x 1080 dp). `node scripts/check-media.mjs` enforces these limits and fails on any metadata segment or chunk (EXIF, GPS, XMP, IPTC, ICC, comments, text chunks, thumbnails), an orientation other than 1, a colour profile other than sRGB, or bytes after the image's end; run it before every push. A metadata-only fix is a lossless strip (drop the JPEG APP1-APP15 and COM segments or the PNG ancillary chunks; the pixels stay identical); re-encode only when there is no lossless path (a non-sRGB profile or an orientation to bake).
 
   | Folder | Longest side | Bytes | Largest place |
   |---|---|---|---|
   | `maps/` | 3840 px | 2.5 MB | Maps place hero: full window width x 160 dp, cover (web desktop) |
   | `social/` | 3776 px | 2.5 MB | Social post photo: 16:9 at full width in the full-screen post view (web desktop) |
   | `music/` | 2276 px | 1 MB | Social story: contained in up to 640 x 1138 dp (tablet portrait) |
-  | every other folder | 1200 px | 400 KB | none: no code, seed or database row references these raster copies (the app shows the providers' own images); `profile-presets/` holds only SVGs |
+  | every other folder | 1200 px | 400 KB | none yet: a new folder gets its own row when the app gets a place for it; `profile-presets/` holds only SVGs |
 
+- Every file has a use (code, seed or database row). A file nobody uses is deleted; the deleted files stay in git history ([docs/DELETED-2026-11-16.md](docs/DELETED-2026-11-16.md) lists the 301 files deleted on 2026-11-16 and how to restore one).
 - Never rename or move a published file: databases store its jsDelivr URL. Re-encode in place (same path and extension), then purge the changed URLs (`https://purge.jsdelivr.net/gh/ReoJefton/reonet-media-storage@main/<path>`).
 - User-generated content (profile photos, cover images, attachments) never goes here; it needs per-user object storage.
 - Backend scrapers write here locally (sibling folder or `REONET_MEDIA_STORAGE_DIR`); commit and push to publish.
 
 ## Directory Structure
 
-- `news/` - News article thumbnails, covers, and publisher icons
-- `radio/` - Radio station logos, stream banners, and stream audio backups
-- `podcasts/` - Podcast cover art, episode banners, and episode clips
-- `music/` - Album artwork, artist photos, and preview tracks
-- `movies/` - Movie posters, backdrop images, and trailers
-- `tv/` - TV show posters, season art, and episode stills
-- `games/` - Game box art, screenshots, and trailers
-- `maps/` - Map place photos, cover images, and satellite snapshots
-- `covers/` - Generic genre/category cover images
+- `maps/` - Map place photos (one row each in `map_places.photos`; two are also social demo photos)
+- `music/` - The social demo story photo `rainy-cafe-study-session-094e3c02ed4a.jpg`
 - `social/` - Photos of the demo social posts (Unsplash photos via Lorem Picsum); author, source and license per file in `social/CREDITS.md`
 - `profile-presets/` - Hosted avatar and cover preset SVGs (`avatars/`, `covers/`); generated by `npm run profile-presets:generate` in the frontend repo. Do not edit by hand.
+- `scripts/` - `check-media.mjs`
+- `docs/` - Storage setup guide and the list of deleted files
